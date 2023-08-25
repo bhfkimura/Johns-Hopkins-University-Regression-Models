@@ -1,0 +1,175 @@
+---
+title: "The influence of manual and automatic transmission on fuel consumption based on the dataset mtcars"
+author: "Bruno"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Summary
+We analyzed the dataset *mtcars*, which considers the fuel consumption and other car features for 32 automobiles, extracted from the 1974 Motor Trend US magazine.
+
+Using a simple linear regression model, we obtained a linear relationship between the variables *mpg* and *am*, where *mpg* stands for fuel consumption (in miles per gallon) and *am* reffers to the car transmission type (automatic or manual). The increase in the mean fuel consumption of cars with manual transmission with respect to the mean for cars with automatic transmission was equal to 7.24, with a p-value of 0.00029. In this case, the 95% confidence interval for the slope of our line is  $[3.64151, 10.84837]$. By inspecting models considering a larger set of variables, for the most significant plot, we obtained that the coefficient related to *am* is compatible with zero (p-value equal to 0.20). Therefore, we concluded that the influence of the transmission type on *mpg* is not statistically significant, and the most appropriate model should not include the variable *am*.
+
+# Introduction 
+
+The data used in this work was extracted from the 1974 Motor Trend US magazine and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
+
+ The data frame *mtcars* contains 32 observations on 11 variables. The variables with their description are shown as follows.
+
+-	**mpg**: Miles per (US) gallon
+-	**cyl**: Number of cylinders
+-	**disp**: Displacement (cu.in.)
+-	**hp**: Gross horsepower
+-	**drat**: Rear axle ratio
+-	**wt**: Weight (1000 lbs)
+-	**qsec**: 1/4 mile time
+-	**vs**: Engine (0 = V-shaped, 1 = straight)
+-	**am**: Transmission (0 = automatic, 1 = manual)
+-	**gear**: Number of forward gears
+-	**carb**: Number of carburetors
+
+In this work, we used the following packages.
+
+```{r}
+library(tidyverse)
+library(GGally)
+```
+
+# Importing and cleaning data
+
+First, let us start by importing the dataset *mtcars* and checking its variables.
+
+```{r}
+df <- mtcars
+str(df)
+```
+
+Through a brief inspection of the dataset, we can verify that there are no duplicated rows or missing values in it.
+
+```{r}
+# Number of duplicated rows
+sum(duplicated(df))
+
+# Number of rows with NAs
+sum(!complete.cases(df))
+```
+
+Let us convert the variables *cyl*, *vs*, *am*, *gear*, and *carb* as factor variables, where for the variable *vs* we label the value 0 as "V" and the value 1 as "S"; and for the variable *am*, we label 0 as "Automatic" and 1 as "Manual." 
+
+```{r}
+df$vs <- factor(df$vs, levels = c(0,1), labels = c("V", "S"))
+df$am <- factor(df$am, levels = c(0,1), labels = c("Automatic", "Manual"))
+
+fac_var <- c("cyl", "gear", "carb")
+for (i in fac_var) df[[i]] <- factor(df[[i]])
+```
+
+```{r}
+summary(df)
+```
+
+# Exploratory analysis
+
+In the following, we explore the possible dependence between the variables involved. Since we are interested in answering questions about the dependence of *mpg* against *am*, we use different colors to highlight the data associated with cars with automatic or manual transmissions. 
+
+```{r, cache = TRUE, out.width = "100%"}
+g <- ggpairs(
+    df,
+    mapping = aes(color = am),
+    upper = list(continuous = wrap("density", alpha = 0.5),
+                 combo = wrap("box_no_facet", lwd  = 0.2)),
+    lower = list(continuous = wrap("points", alpha = 0.5, size = 0.5),
+                 combo = wrap("dot_no_facet", alpha = 0.5, size = 0.5)),
+    proportions = "auto"
+) +
+    theme(axis.text = element_text(size = 5),
+          axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(g)
+```
+
+Let us explore the values of *mpg* across the variable *am*. 
+
+```{r}
+ggplot(data = df,
+       mapping = aes(x = am, y = mpg, fill = am)) +
+    geom_boxplot() 
+```
+
+In the boxplot above, we can verify that according to our dataset, there should be a difference between the mean of *mpg* for cars with automatic and manual transmissions. It is important to highlight that our data was not randomized, and there is the possibility of the existence of confounders. Let us make a linear regression in order to discover the possible dependence of *mpg* against the other variables. 
+
+# Linear regression
+
+## mpg vs am
+
+First, let us start with a very simple model where we explore the dependence of *mpg* only against the variable *am*. 
+
+```{r}
+ fit1 <- lm(mpg ~ am, data = df)
+ summary(fit1)
+ confint(fit1)
+```
+
+According to the results shown above, there is a dependence between *mpg* and *am*, where the increase (using automatic transmission as a reference) on the mean mpg is equal to 7.24 with a p-value of 0.00029. In this case the 95% confidence interval for the slope of our line is  $[3.64151, 10.84837]$
+
+However, this result may be biased in case mpg truly depends on a larger set of variables. In order to address the quality of our fit, let us analyze the residual plot.
+```{r}
+ggplot(
+     data = data.frame(
+         cars = factor(rownames(df), levels = rownames(df)),
+         residuals = resid(fit1)
+     ),
+     mapping = aes(x = cars, y = residuals)
+ ) +
+     scale_x_discrete(guide = guide_axis(angle = 45)) +
+     geom_point() +
+     geom_hline(yintercept = 0,
+                linetype = "dashed",
+                color = "red")
+ 
+```
+
+Based on the plot above, we conclude that despite the fact that the coefficient associated with *am* being non-zero is statistically significant, the residuals do not seem to distribute randomly around zero. 
+
+```{r}
+plot(fit1, which = 2)
+```
+
+Furthermore, by inspecting the QQ plot above, we see that the residuals do not follow a normal distribution. Therefore, we have to analyze models with a larger set of variables to obtain a better fit and check whether such a dependence still holds.
+
+## Model selection
+
+Let us consider the series of nested models that include the dependence on the variable *am*:
+
+- Model 1: mpg ~ am
+- Model 2: mpg ~ am + wt
+- Model 3: mpg ~ am + wt + cyl
+- Model 4: mpg ~ am + wt + cyl + hp
+- Model 5: mpg ~ am + wt + cyl + hp + gear
+
+```{r}
+ fit1 <- lm(mpg ~ am, data = df)
+ fit2 <- lm(mpg ~ am + wt, data = df)
+ fit3 <- lm(mpg ~ am + wt + cyl, data = df)
+ fit4 <- lm(mpg ~ am + wt + cyl + hp , data = df)
+ fit5 <- lm(mpg ~ am + wt + cyl + hp + gear, data = df)
+
+  anova(fit1,fit2,fit3, fit4, fit5)
+```
+
+According to ANOVA, adding the variable *gear* to Model 4 gives us an F-statistic with a p-value greater than 0.05. Note that among the 5 models considered above, Model 4 is the most appropriate one. The values for the intercept and coefficients for fit4 are given as follows.
+
+```{r}
+summary(fit4)
+```
+
+Although the F-statistic for Model 4 is statistically significant with a p-value equal to $4.87 \times 10^{-11}$, the hypothesis that the coefficient associated with *am* is non-zero cannot be rejected since the p-value for the t-test is equal to $0.20$.
+
+# Conclusion
+
+By using a simple linear regression model, we found a relationship between the variables *mpg* and *am*, where the increase (using automatic transmission as a reference) in the mean mpg was equal to 7.24 with a p-value of 0.00029. In this case, the 95% confidence interval for the slope of our line is  $[3.64151, 10.84837]$. By inspecting the residuals of our simple linear regression, we considered a model which considers a larger set o variables. For the most significant plot, we obtained that the coefficient related to *am* is compatible with zero (p-value equal to 0.20). Therefore, we concluded that the influence of the transmission type on *mpg* is not statistically significant, and the most appropriate model should not include the variable *am*.
+
